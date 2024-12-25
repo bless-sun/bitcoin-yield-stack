@@ -315,21 +315,32 @@
         ;; Validate sender authorization
         (asserts! (is-eq tx-sender sender) (err ERR-UNAUTHORIZED))
         
-        ;; Perform internal transfer
-        (try! (transfer-internal amount sender recipient))
+        ;; Validate recipient is not null
+        (asserts! (not (is-eq recipient sender)) (err ERR-INVALID-AMOUNT))
         
-        ;; Handle optional memo
-        (match memo to-print (print to-print) 0x)
+        ;; Validate amount
+        (asserts! (> amount u0) (err ERR-INVALID-AMOUNT))
         
-        ;; Log transfer event
-        (print {
-            event: "transfer",
-            sender: sender,
-            recipient: recipient,
-            amount: amount
-        })
-        
-        (ok true)
+        ;; Check sender's balance
+        (let ((sender-balance (default-to u0 (map-get? staker-balances sender))))
+            (asserts! (>= sender-balance amount) (err ERR-INSUFFICIENT-BALANCE))
+            
+            ;; Perform internal transfer after validation
+            (try! (transfer-internal amount sender recipient))
+            
+            ;; Handle optional memo
+            (match memo to-print (print to-print) 0x)
+            
+            ;; Log transfer event
+            (print {
+                event: "transfer",
+                sender: sender,
+                recipient: recipient,
+                amount: amount
+            })
+            
+            (ok true)
+        )
     )
 )
 
