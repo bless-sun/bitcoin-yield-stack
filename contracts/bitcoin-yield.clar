@@ -84,3 +84,61 @@
 
 (define-read-only (get-token-uri)
     (ok (var-get token-uri)))
+
+;; Internal Helper Functions
+(define-private (calculate-yield (amount uint) (blocks uint))
+    (let 
+        (
+            (rate (var-get yield-rate))
+            (time-factor (/ blocks BLOCKS-PER-DAY))
+            (base-yield (* amount rate))
+        )
+        (/ (* base-yield time-factor) u10000)
+    )
+)
+
+(define-private (update-risk-score (staker principal) (amount uint))
+    (let 
+        (
+            (current-score (default-to u0 (map-get? risk-scores staker)))
+            (stake-factor (/ amount u100000000))
+            (new-score (+ current-score stake-factor))
+        )
+        (map-set risk-scores staker new-score)
+        new-score
+    )
+)
+
+(define-private (check-yield-availability)
+    (let 
+        (
+            (current-block block-height)
+            (last-distribution (var-get last-distribution-block))
+        )
+        (if (>= current-block (+ last-distribution BLOCKS-PER-DAY))
+            (ok true)
+            (err ERR-NO-YIELD-AVAILABLE)
+        )
+    )
+)
+
+(define-private (transfer-internal (amount uint) (sender principal) (recipient principal))
+    (begin
+        ;; Validate transfer amount
+        (asserts! (> amount u0) (err ERR-INVALID-AMOUNT))
+        (asserts! (not (is-eq sender recipient)) (err ERR-INVALID-AMOUNT))
+        
+        (let 
+            (
+                (sender-balance (default-to u0 (map-get? staker-balances sender)))
+            )
+            (asserts! (>= sender-balance amount) (err ERR-INSUFFICIENT-BALANCE))
+            
+            (map-set staker-balances sender (- sender-balance amount))
+            (map-set staker-balances recipient 
+                (+ (default-to u0 (map-get? staker-balances recipient)) amount)
+            )
+            (ok true)
+        )
+    )
+)
